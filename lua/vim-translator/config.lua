@@ -13,15 +13,7 @@ M.defaults = {
     extra_body = {}, -- 透传给 API 的额外字段
   },
   -- 语言方向固定自动检测（含中文→译英，否则→译中），无配置项
-
-  no_default_maps = false,
-  keys = {
-    word = "<leader>w", -- n 模式：光标单词
-    line = "<leader>l", -- n 模式：当前行
-    sentence = "<leader>s", -- v 模式：选中句子
-    replace = "<leader>r", -- v 模式：翻译并替换选中文本
-    close = "<leader>q", -- n 模式：关闭浮窗
-  },
+  -- 不内置键位：用户通过 :Translate* 命令或自行 vim.keymap.set 调用
 
   window = {
     max_width = 60,

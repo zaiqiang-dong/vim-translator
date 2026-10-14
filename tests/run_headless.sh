@@ -12,9 +12,9 @@ NVIM=(nvim --headless -u NORC -n -i NONE
   -c 'runtime plugin/translator.lua'
   -c "lua require('vim-translator').setup({ llm = { base_url = '${BASE_URL}', model = '${MODEL}' } })")
 
-# 用例 1：单词翻译（:Translate 光标单词）
+# 用例 1：normal 模式 :Translate → 光标单词
 out=$("${NVIM[@]}" \
-  -c 'normal ihello' \
+  -c 'normal ihello world' \
   -c 'normal $' \
   -c 'Translate' \
   -c 'sleep 25' \
@@ -22,10 +22,12 @@ out=$("${NVIM[@]}" \
   -c 'qa!' 2>&1 || true)
 echo "case1 (word): $out"
 
-# 用例 2：句子翻译（可视选区 → 键位）
+# 用例 2：visual 模式 :Translate → 选中文本（模拟用户 n/v 各映射一个键）
 out=$("${NVIM[@]}" \
   -c 'normal ithis is a translation plugin test' \
-  -c 'call feedkeys("ggVG\\s", "xt")' \
+  -c 'nmap <buffer> <leader>t <cmd>Translate<cr>' \
+  -c 'vmap <buffer> <leader>t <cmd>Translate<cr>' \
+  -c 'call feedkeys("ggVG\\t", "xt")' \
   -c 'sleep 25' \
   -c 'lua local ui = require("vim-translator.ui"); print("SENT_TEST ui_open=" .. tostring(ui.is_open()))' \
   -c 'qa!' 2>&1 || true)

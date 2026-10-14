@@ -28,42 +28,20 @@ function M.cursor_word()
   return word
 end
 
----当前行文本；空行返回 nil
----@return string|nil
-function M.current_line()
-  local line = vim.api.nvim_get_current_line()
-  if line:match("^%s*$") then
-    return nil
-  end
-  return line
-end
-
----当前（或最近一次）可视选择的模式：'v' | 'V' | '\22'（块选）
+---当前可视选择的模式：'v' | 'V' | '\22'（块选）；仅在 visual 模式下调用
 local function visual_kind()
-  local m = vim.fn.mode()
-  if m == "v" or m == "V" or m == "\22" then
-    return m
-  end
-  return vim.fn.visualmode()
+  return vim.fn.mode()
 end
 
----可视选区的行列范围（sl,sc,el,ec），规范化为 start ≤ end
----visual 模式下 '< 尚未更新，用 v 标记（选区起点）与 . （光标）；
----normal 模式下（如 :'<,'>TranslateVisual）用 '< '>
+---可视选区的行列范围（sl,sc,el,ec），规范化为 start ≤ end；仅在 visual 模式下调用
+---visual 模式下 '< 尚未更新，用 v 标记（选区起点）与 . （光标）
 ---注意：光标列指向多字节字符的首字节，字符级包含选择应推进 ec 到该字符末字节
 ---@return integer,integer,integer,integer
 function M.visual_range()
   local kind = visual_kind()
-  local sl, sc, el, ec
-  if vim.fn.mode():find("^[vV\22]") then
-    local s = vim.fn.getpos("v")
-    local e = vim.fn.getpos(".")
-    sl, sc, el, ec = s[2], s[3], e[2], e[3]
-  else
-    local s = vim.fn.getpos("'<")
-    local e = vim.fn.getpos("'>")
-    sl, sc, el, ec = s[2], s[3], e[2], e[3]
-  end
+  local s = vim.fn.getpos("v")
+  local e = vim.fn.getpos(".")
+  local sl, sc, el, ec = s[2], s[3], e[2], e[3]
   if sl > el or (sl == el and sc > ec) then
     sl, sc, el, ec = el, ec, sl, sc
   end
@@ -80,7 +58,7 @@ function M.visual_range()
   return sl, sc, el, ec
 end
 
----可视模式选中文本（保留换行）
+---可视模式选中文本（保留换行）；仅在 visual 模式下调用
 ---@return string|nil
 function M.visual_selection()
   local sl, sc, el, ec = M.visual_range()

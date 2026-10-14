@@ -9,6 +9,10 @@ local buf = nil
 local ns = vim.api.nvim_create_namespace("vim-translator")
 local close_ns = vim.api.nvim_create_namespace("vim-translator-close")
 
+-- 最近一次翻译的纯译文（按 i 插入用）与其原文范围（按 i 替换用）
+local last_result = nil
+local last_range = nil -- {sl,sc,el,ec,linewise}
+
 ---渲染行模型：{ { text = "n. ", hl = "VTPos" }, ... } 的一行
 ---先构造模型再统一写 buffer，便于测试
 
@@ -113,7 +117,68 @@ local function apply_model(lines)
   end
 end
 
----按内容行数/宽度调整浮窗大小
+---从结果表提取纯译文文本
+---@param result table
+---@return string|nil
+local function result_text(result)
+  if not result then
+    return nil
+  end
+  if result.kind == "word" then
+    -- 单词：拼接各词性释义（如 "你好；（用于打招呼）喂; 问候，招呼"）
+    local parts = {}
+    for _, def in ipairs(result.data.defs or {}) do
+      table.insert(parts, def.trans or "")
+    end
+    return table.concat(parts, "; ")
+  end
+  return result.data.translation
+end
+
+---按 i：关闭浮窗，用译文替换原文范围（可 u 撤销），并进入插入模式
+local function insert_result()
+  local text = result_text(last_result)
+  M.close()
+  if not text or text == "" then
+    return
+  end
+  local new_lines = vim.split(text, "\n", { plain = true })
+  local r = last_range
+
+  if not r then
+    -- 无原文范围（异常情况）：退回光标处插入
+    local lnum, col = unpack(vim.api.nvim_win_get_cursor(0))
+    vim.api.nvim_buf_set_text(0, lnum - 1, col, lnum - 1, col, new_lines)
+    vim.api.nvim_win_set_cursor(0, { lnum, col + #(new_lines[1] or "") })
+    vim.cmd("startinsert")
+    return
+  end
+
+  if r.linewise then
+    -- 行模式：整行替换
+    vim.api.nvim_buf_set_lines(0, r.sl - 1, r.el, false, new_lines)
+    vim.api.nvim_win_set_cursor(0, { r.sl + #new_lines - 1, #(new_lines[#new_lines]) })
+  else
+    -- 字符模式：head + 译文 + tail
+    local lines = vim.api.nvim_buf_get_lines(0, r.sl - 1, r.el, false)
+    if #lines >= 1 and r.sc <= #lines[1] and r.ec <= #lines[#lines] then
+      local head = lines[1]:sub(1, r.sc - 1)
+      local tail = lines[#lines]:sub(r.ec + 1)
+      local all = {}
+      for i, l in ipairs(new_lines) do
+        table.insert(all, (i == 1 and head or "") .. l .. (i == #new_lines and tail or ""))
+      end
+      vim.api.nvim_buf_set_lines(0, r.sl - 1, r.el, false, all)
+      vim.api.nvim_win_set_cursor(0, { r.sl + #all - 1, #(all[#all]) })
+    else
+      -- 原文行已被改动（范围越界）：退回光标处插入
+      local lnum, col = unpack(vim.api.nvim_win_get_cursor(0))
+      vim.api.nvim_buf_set_text(0, lnum - 1, col, lnum - 1, col, new_lines)
+      vim.api.nvim_win_set_cursor(0, { lnum, col + #(new_lines[1] or "") })
+    end
+  end
+  vim.cmd("startinsert")
+end
 local function resize()
   if not win or not vim.api.nvim_win_is_valid(win) then
     return
@@ -150,7 +215,7 @@ function M.open()
     style = "minimal",
   })
   vim.wo[win].winblend = math.floor((1 - wcfg.opacity) * 100)
-  -- 任意键按下即关闭（对浮窗后面的原 buffer 生效，浮窗本身不可聚焦）
+  -- 任意键按下即关闭；按 i 则先把译文插入光标处再关闭
   local close_aug = vim.api.nvim_create_augroup("vim-translator-close", { clear = true })
   vim.api.nvim_create_autocmd("InsertEnter", {
     group = close_aug,
@@ -159,8 +224,11 @@ function M.open()
   })
   vim.on_key(function(_, typed)
     if typed ~= "" and M.is_open() then
+      if typed == "i" and last_result then
+        insert_result() -- 内部会 close
+        return
+      end
       M.close()
-      vim.on_key(nil, close_ns)
     end
   end, close_ns)
 end
@@ -185,14 +253,16 @@ function M.show_loading(text)
   resize()
 end
 
----显示翻译结果（api.lua 的 result 表）
-function M.show_result(result)
+---显示翻译结果（api.lua 的 result 表）；range 为原文范围，按 i 时替换用
+function M.show_result(result, range)
   local lines
   if result.kind == "word" then
     lines = render_word(result.data)
   else
     lines = render_sentence(result.data)
   end
+  last_result = result
+  last_range = range
   apply_model(lines)
   resize()
 end
@@ -202,23 +272,6 @@ function M.show_error(err)
   M.open()
   apply_model(render_error(err))
   resize()
-end
-
----取纯译文文本（TranslateReplace 用）
----@param result table
----@return string|nil
-function M.result_text(result)
-  if not result then
-    return nil
-  end
-  if result.kind == "word" then
-    local parts = {}
-    for _, def in ipairs(result.data.defs or {}) do
-      table.insert(parts, def.trans or "")
-    end
-    return table.concat(parts, "; ")
-  end
-  return result.data.translation
 end
 
 return M

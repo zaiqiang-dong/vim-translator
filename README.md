@@ -3,10 +3,8 @@
 基于大模型（OpenAI 兼容 API）的 **中英文互译** Neovim 插件（纯 Lua）。
 
 - 仅中英互译，自动检测方向：文本含中文 → 译成英文；否则 → 译成中文
-- 单词翻译：词典式结果（音标、词性、释义、例句）
-- 句子/段落翻译：可视选区、当前行
-- `TranslateReplace`：译文直接写回缓冲区（可 `u` 撤销）
-- 浮窗展示，各字段（音标/词性/释义/例句）分别配色
+- **单一键位**：没选中就翻译光标单词（词典式：音标、词性、释义、例句）；选中了就翻译选中的句子/段落
+- 浮窗展示，各字段（音标/词性/释义/例句）分别配色，按任意键自动关闭
 - 异步请求（`vim.system` + `curl`），不阻塞编辑
 - 支持 lazy.nvim 懒加载
 
@@ -23,13 +21,9 @@
 {
   "zaiqdong/vim-translator",
   lazy = true,
-  cmd = { "Translate", "TranslateLine", "TranslateVisual", "TranslateReplace", "TranslateClose" },
+  cmd = { "Translate" },
   keys = {
-    { "<leader>w", desc = "翻译光标单词" },
-    { "<leader>l", desc = "翻译当前行" },
-    { "<leader>s", mode = "v", desc = "翻译选中句子" },
-    { "<leader>r", mode = "v", desc = "翻译并替换选中文本" },
-    { "<leader>q", desc = "关闭翻译浮窗" },
+    { "<leader>t", "<cmd>Translate<cr>", mode = { "n", "v" }, desc = "翻译单词/选中文本" },
   },
   opts = {
     llm = {
@@ -66,15 +60,26 @@ require("vim-translator").setup({
 
 ## 用法
 
-| 键 | 模式 | 命令 | 行为 |
-|---|---|---|---|
-| `<leader>w` | n | `:Translate` | 翻译光标单词（词典式） |
-| `<leader>l` | n | `:TranslateLine` | 翻译当前行 |
-| `<leader>s` | v | `:TranslateVisual` | 翻译选中的句子/段落 |
-| `<leader>r` | v | `:TranslateReplace` | 翻译并替换选中文本 |
-| `<leader>q` | n | `:TranslateClose` | 关闭翻译浮窗 |
+插件**不内置任何键位**，通过 `:Translate` 命令触发；键位由你自行映射。
 
-浮窗内按 `q` / `<Esc>` 关闭。
+`Translate` 的行为随调用时的模式自动切换：
+
+| 调用时模式 | 行为 |
+|---|---|
+| normal（未选中） | 翻译光标所在单词（词典式结果） |
+| visual（有选区） | 翻译选中的句子/段落 |
+
+推荐映射（同一个键，n/v 两种模式各一份，放在 lazy spec 的 `keys` 里）：
+
+```lua
+vim.keymap.set("n", "<leader>t", "<cmd>Translate<cr>", { desc = "翻译光标单词" })
+vim.keymap.set("v", "<leader>t", "<cmd>Translate<cr>", { desc = "翻译选中句子" })
+```
+
+浮窗打开后的按键行为：
+
+- **任意键**：关闭浮窗
+- **`i`**：用译文**替换原文**（单词翻译替换光标单词；选区翻译替换选中部分；均可 `u` 撤销），替换后光标停在译文末尾并进入插入模式
 
 单词翻译效果（浮窗）：
 
@@ -100,15 +105,6 @@ require("vim-translator").setup({
     timeout = 60,              -- 秒
     proxy = "",                -- 可选 http(s):// 代理
     extra_body = {},           -- 透传给 API 的额外 JSON 字段
-  },
-
-  no_default_maps = false,     -- true 则不创建默认键位
-  keys = {
-    word = "<leader>w",
-    line = "<leader>l",
-    sentence = "<leader>s",
-    replace = "<leader>r",
-    close = "<leader>q",
   },
 
   window = {
@@ -142,7 +138,7 @@ require("vim-translator").setup({
 VIM_TRANSLATOR_API_KEY=sk-xxx tests/run_headless.sh
 ```
 
-headless 冒烟（单词/句子浮窗）+ 单元测试（方向检测、单词判定）。
+headless 冒烟（单词/选区浮窗）+ 单元测试（方向检测、单词判定）。
 
 ## 开发文档
 
