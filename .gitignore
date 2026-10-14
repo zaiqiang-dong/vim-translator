@@ -12,13 +12,11 @@ nvim.log
 .cache/
 state/
 shada/
-.luarc.json
 
 # ==== Lua 开发工具 ====
 .luacheckrc
 selene.toml
 stylua.toml
-
 # ==== 测试 / 覆盖率 ====
 /tmp/
 *.tmp
