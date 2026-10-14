@@ -7,6 +7,7 @@ local M = {}
 local win = nil
 local buf = nil
 local ns = vim.api.nvim_create_namespace("vim-translator")
+local close_ns = vim.api.nvim_create_namespace("vim-translator-close")
 
 ---渲染行模型：{ { text = "n. ", hl = "VTPos" }, ... } 的一行
 ---先构造模型再统一写 buffer，便于测试
@@ -149,19 +150,19 @@ function M.open()
     style = "minimal",
   })
   vim.wo[win].winblend = math.floor((1 - wcfg.opacity) * 100)
-  -- 关闭键（buf-local）
-  local opts = { buffer = buf, silent = true, nowait = true }
-  vim.keymap.set("n", "q", M.close, opts)
-  vim.keymap.set("n", "<Esc>", M.close, opts)
-  vim.api.nvim_create_autocmd("CursorMoved", {
+  -- 任意键按下即关闭（对浮窗后面的原 buffer 生效，浮窗本身不可聚焦）
+  local close_aug = vim.api.nvim_create_augroup("vim-translator-close", { clear = true })
+  vim.api.nvim_create_autocmd("InsertEnter", {
+    group = close_aug,
     buffer = 0,
-    once = true,
-    callback = function()
-      if win and vim.api.nvim_win_is_valid(win) then
-        vim.api.nvim_win_set_config(win, { relative = "cursor", row = 1, col = 0 })
-      end
-    end,
+    callback = M.close,
   })
+  vim.on_key(function(_, typed)
+    if typed ~= "" and M.is_open() then
+      M.close()
+      vim.on_key(nil, close_ns)
+    end
+  end, close_ns)
 end
 
 function M.close()
@@ -169,6 +170,8 @@ function M.close()
     vim.api.nvim_win_close(win, true)
   end
   win = nil
+  vim.on_key(nil, close_ns)
+  vim.api.nvim_clear_autocmds({ group = "vim-translator-close" })
 end
 
 function M.is_open()
