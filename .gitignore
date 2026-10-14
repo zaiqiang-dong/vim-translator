@@ -1,0 +1,43 @@
+# ==== 编辑器 / IDE ====
+*.swp
+*.swo
+*~
+.netrwhist
+.idea/
+.vscode/
+
+# ==== Neovim/Vim 运行时产物 ====
+nvim.log
+*.log
+.cache/
+state/
+shada/
+.luarc.json
+
+# ==== Lua 开发工具 ====
+.luacheckrc
+selene.toml
+stylua.toml
+
+# ==== 测试 / 覆盖率 ====
+/tmp/
+*.tmp
+coverage/
+*.out
+
+# ==== 插件运行时临时文件（api.lua 的请求体临时文件） ====
+# 实际写在 /tmp，但防止误配置后落到仓库内
+vim_translator_*.json
+
+# ==== 系统文件 ====
+.DS_Store
+Thumbs.db
+
+# ==== 密钥（绝不能提交） ====
+*.env
+.env.*
+
+# ==== AI 助手本地目录 ====
+.agents/
+.codex/
+.trae/
