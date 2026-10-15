@@ -45,7 +45,19 @@ end
 ---构造 curl 命令（请求体经临时文件传入，规避转义/注入）
 local function build_cmd(tmpfile)
   local llm = config.opts.llm
-  local url = llm.base_url:gsub("/+$", "") .. "/v1/chat/completions"
+  -- base_url 兼容三种写法：
+  --   https://host                       → 拼 /v1/chat/completions
+  --   https://host/v1                    → 拼 /chat/completions
+  --   https://host/v1/chat/completions   → 原样使用
+  local base = llm.base_url:gsub("/+$", "")
+  local url
+  if base:find("/chat/completions$") then
+    url = base
+  elseif base:find("/v1$") then
+    url = base .. "/chat/completions"
+  else
+    url = base .. "/v1/chat/completions"
+  end
   local cmd = {
     "curl",
     "-sS",
