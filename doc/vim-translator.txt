@@ -1,0 +1,124 @@
+*vim-translator.txt*	基于大模型的中英互译 Neovim 插件
+
+==============================================================================
+内容						    *vim-translator*
+
+1. 简介					|vt-intro|
+2. 快速开始				|vt-quickstart|
+3. 用法					|vt-usage|
+4. 配置					|vt-config|
+5. 后端					|vt-backend|
+6. 命令与键位				|vt-commands|
+
+==============================================================================
+1. 简介						    *vt-intro*
+
+vim-translator 通过大模型完成中英互译（仅中英，自动检测方向：
+含中文 → 译英；否则 → 译中）。支持单词（词典式结果）与句子/段落翻译，
+浮窗展示，按任意键关闭，按 `i` 用译文替换原文。
+
+依赖：Neovim ≥ 0.10、curl（llm 后端）。
+
+==============================================================================
+2. 快速开始					    *vt-quickstart*
+
+lazy.nvim: >
+<
+	{
+	  "zaiqiang-dong/vim-translator",
+	  lazy = true,
+	  cmd = { "Translate" },
+	  keys = {
+	    { "<leader>t", "<cmd>Translate<cr>", mode = { "n", "v" }, desc = "翻译" },
+	  },
+	  opts = {
+	    llm = { base_url = "...", model = "..." },
+	  },
+	}
+<
+api_key 经环境变量 VIM_TRANSLATOR_API_KEY 提供（或 opts.llm.api_key）。
+
+==============================================================================
+3. 用法						    *vt-usage*
+
+只有一个命令 :Translate，行为随模式自动切换：
+  - normal（未选中）: 翻译光标所在单词，词典式结果
+    （音标、词性、释义、例句）
+  - visual（有选区）: 翻译选中的句子/段落
+
+浮窗打开后：
+  - 任意键	关闭浮窗
+  - i		用译文替换原文（单词替换光标单词，选区替换选中
+		部分；可 `u` 撤销），替换后进入插入模式
+
+==============================================================================
+4. 配置						    *vt-config*
+
+完整默认值： >
+<
+	{
+	  provider = "llm",
+	  llm = {
+	    base_url = "",        -- 兼容三种写法：host / host/v1 /
+				  -- host/v1/chat/completions
+	    api_key = "",         -- 空则读 $VIM_TRANSLATOR_API_KEY
+	    model = "",
+	    temperature = 0.1,
+	    timeout = 60,
+	    proxy = "",
+	    extra_body = {},
+	  },
+	  acp = {
+	    mode = "spawn",       -- "spawn" | "connect"
+	    command = "traecli",
+	    args = { "acp", "serve" },
+	    env = {},
+	    host = "127.0.0.1",   -- connect 模式
+	    port = 8377,
+	    socket = "",
+	    timeout = 120,
+	  },
+	  window = {
+	    max_width = 60, max_height = 20,
+	    border = "rounded", opacity = 0.95,
+	  },
+	  highlights = {
+	    title = { fg = "#61afef", bold = true },
+	    phonetic = { fg = "#98c379" },
+	    pos = { fg = "#e5c07b" },
+	    trans = { fg = "#abb2bf" },
+	    example = { fg = "#7f848e", italic = true },
+	    example_trans = { fg = "#56b6c2" },
+	    error = { fg = "#e06c75", bold = true },
+	    loading = { fg = "#c678dd", italic = true },
+	  },
+	}
+<
+高亮组：VTTitle VTPhonetic VTPos VTTrans VTExample VTExampleTrans VTError
+VTLoading。可用 `:hi VTPhonetic guifg=red` 随时覆盖。
+
+==============================================================================
+5. 后端						    *vt-backend*
+
+provider = "llm"（默认）	OpenAI 兼容 /chat/completions，curl 异步。
+provider = "acp"		ACP (Agent Client Protocol) agent：
+  - spawn 模式: 插件拉起 traecli acp serve 子进程，常驻复用会话，
+    退出 nvim 自动回收，无需手动启动任何服务。
+  - connect 模式: 连接已存在的 TCP/unix socket ACP 服务。
+
+注意：ACP 基于 stdio，手动在终端跑 `traecli acp serve` 无法被连接
+（不监听端口）；要么 spawn 模式让插件自己管理，要么经 socket 桥接。
+
+==============================================================================
+6. 命令与键位					    *vt-commands*
+
+插件不内置任何键位。命令：
+  :Translate	翻译光标单词 / 可视选区
+
+推荐映射： >
+<
+	vim.keymap.set("n", "<leader>t", "<cmd>Translate<cr>")
+	vim.keymap.set("v", "<leader>t", "<cmd>Translate<cr>")
+
+==============================================================================
+vim:tw=78:ts=8:noet:ft=help:norl:
