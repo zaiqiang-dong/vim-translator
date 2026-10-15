@@ -9,7 +9,7 @@ local buf = nil
 local ns = vim.api.nvim_create_namespace("vim-translator")
 local close_ns = vim.api.nvim_create_namespace("vim-translator-close")
 
--- 最近一次翻译的纯译文（按 i 插入用）与其原文范围（按 i 替换用）
+-- 最近一次翻译的纯译文（按 t 插入用）与其原文范围（按 t 替换用）
 local last_result = nil
 local last_range = nil -- {sl,sc,el,ec,linewise}
 
@@ -135,7 +135,7 @@ local function result_text(result)
   return result.data.translation
 end
 
----按 i：关闭浮窗，用译文替换原文范围（可 u 撤销），并进入插入模式
+---按 t：关闭浮窗，用译文替换原文范围（可 u 撤销），并进入插入模式
 local function insert_result()
   local text = result_text(last_result)
   M.close()
@@ -215,7 +215,7 @@ function M.open()
     style = "minimal",
   })
   vim.wo[win].winblend = math.floor((1 - wcfg.opacity) * 100)
-  -- 任意键按下即关闭；按 i 则先把译文插入光标处再关闭
+  -- 任意键按下即关闭；按 t 则先用译文替换原文再关闭
   local close_aug = vim.api.nvim_create_augroup("vim-translator-close", { clear = true })
   vim.api.nvim_create_autocmd("InsertEnter", {
     group = close_aug,
@@ -224,7 +224,7 @@ function M.open()
   })
   vim.on_key(function(_, typed)
     if typed ~= "" and M.is_open() then
-      if typed == "i" and last_result then
+      if typed == "t" and last_result then
         insert_result() -- 内部会 close
         return
       end
@@ -253,7 +253,7 @@ function M.show_loading(text)
   resize()
 end
 
----显示翻译结果（api.lua 的 result 表）；range 为原文范围，按 i 时替换用
+---显示翻译结果（api.lua 的 result 表）；range 为原文范围，按 t 时替换用
 function M.show_result(result, range)
   local lines
   if result.kind == "word" then
