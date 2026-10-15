@@ -2,7 +2,10 @@
 local M = {}
 
 M.defaults = {
-  -- 大模型服务（OpenAI 兼容），必填；api_key 也可经环境变量 VIM_TRANSLATOR_API_KEY
+  -- 翻译后端："llm" = OpenAI 兼容 API（默认）；"acp" = 通过 ACP agent 翻译
+  provider = "llm",
+
+  -- 后端一：大模型服务（OpenAI 兼容），必填；api_key 也可经环境变量 VIM_TRANSLATOR_API_KEY
   llm = {
     base_url = "https://autoai.seewayai.com",
     api_key = "",
@@ -12,6 +15,27 @@ M.defaults = {
     proxy = "",
     extra_body = {}, -- 透传给 API 的额外字段
   },
+
+  -- 后端二：ACP agent（provider = "acp" 时启用）
+  -- mode = "spawn"（默认）：插件直接拉起 agent 子进程（traecli acp serve），
+  --   进程常驻复用会话，退出 nvim 时自动收掉，无需任何手动操作/桥接脚本
+  -- mode = "connect"：连接后台 ACP 服务（TCP 或 unix socket），插件纯 client
+  acp = {
+    mode = "spawn", -- "spawn" | "connect"
+
+    -- spawn 模式：agent 命令（默认 traecli；也可换 claude/opencode 等）
+    command = "traecli",
+    args = { "acp", "serve" },
+    env = {}, -- 额外环境变量
+
+    -- connect 模式（二选一）：TCP host/port 或 unix socket 路径
+    host = "127.0.0.1",
+    port = 8377,
+    socket = "", -- 非空则优先用 unix socket
+
+    timeout = 120, -- 秒
+  },
+
   -- 语言方向固定自动检测（含中文→译英，否则→译中），无配置项
   -- 不内置键位：用户通过 :Translate* 命令或自行 vim.keymap.set 调用
 
@@ -56,6 +80,24 @@ end
 
 ---首次调用时校验，返回错误字符串或 nil
 function M.validate()
+  if M.opts.provider == "acp" then
+    local acp = M.opts.acp
+    if acp.mode == "connect" then
+      local has_tcp = acp.port ~= nil and acp.port > 0
+      local has_unix = acp.socket ~= nil and acp.socket ~= ""
+      if not has_tcp and not has_unix then
+        return "vim-translator: connect 模式需配置 acp.port（TCP）或 acp.socket（unix）"
+      end
+      return nil
+    end
+    if not acp.command or acp.command == "" then
+      return "vim-translator: 未配置 acp.command"
+    end
+    if not vim.fn.executable(acp.command) then
+      return "vim-translator: acp.command 不可执行: " .. acp.command
+    end
+    return nil
+  end
   if not vim.fn.executable("curl") then
     return "vim-translator: 需要 curl（未找到可执行文件）"
   end

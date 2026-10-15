@@ -70,6 +70,33 @@ local function build_cmd(tmpfile)
   return cmd
 end
 
+---构造 ACP 单条用户 prompt（agent 无 system 角色，指令并入正文）
+---@param text string 原文
+---@param is_word boolean
+---@return string
+function M.build_prompt(text, is_word)
+  local system = is_word and WORD_PROMPT or SENTENCE_PROMPT
+  return system .. "\n\n待翻译文本：\n" .. text
+end
+
+---把模型输出的文本内容分类成结果表（llm / acp 共用）
+---@param content string 模型输出（可能带 markdown 代码块包裹）
+---@return table result {kind="word"|"sentence"|"plain", data=...}
+function M.parse_content(content)
+  local ok, data = pcall(vim.json.decode, strip_code_fence(content))
+  if not ok or type(data) ~= "table" then
+    -- 纯文本回退：整体作为 sentence.translation 展示
+    return { kind = "plain", data = { translation = strip_code_fence(content) } }
+  end
+  if data.translation or data.source then
+    return { kind = "sentence", data = data }
+  end
+  if data.word or data.defs then
+    return { kind = "word", data = data }
+  end
+  return { kind = "plain", data = { translation = strip_code_fence(content) } }
+end
+
 ---解析响应 → 结果表（成功）或 nil, err（失败）
 ---@param stdout string curl 原始输出
 ---@param code integer curl exit code
@@ -95,18 +122,7 @@ local function parse_response(stdout, code)
   if not content or content == "" then
     return nil, "API 返回了空的 choices/message.content"
   end
-  local ok2, data = pcall(vim.json.decode, strip_code_fence(content))
-  if not ok2 or type(data) ~= "table" then
-    -- 纯文本回退：整体作为 sentence.translation 展示
-    return { kind = "plain", data = { translation = strip_code_fence(content) } }, nil
-  end
-  if data.translation or data.source then
-    return { kind = "sentence", data = data }, nil
-  end
-  if data.word or data.defs then
-    return { kind = "word", data = data }, nil
-  end
-  return { kind = "plain", data = { translation = strip_code_fence(content) } }, nil
+  return M.parse_content(content)
 end
 
 ---对外入口：翻译 text。自动判定单词/句子模式。
@@ -120,6 +136,11 @@ function M.translate(text, on_done)
   end
 
   local is_word = require("vim-translator.text").is_word(text)
+
+  -- 后端分发：acp = 经 ACP agent 翻译；默认 llm = OpenAI 兼容 API
+  if config.opts.provider == "acp" then
+    return require("vim-translator.acp").translate(M.build_prompt(text, is_word), on_done)
+  end
 
   -- 单飞：取消旧请求
   if job then

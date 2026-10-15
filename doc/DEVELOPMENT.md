@@ -1,18 +1,19 @@
 # vim-translator 开发文档
 
 一个基于大模型（LLM）的**中英文互译** Neovim 插件，**Lua 实现**，支持单词和句子翻译、
-语言自动检测（中→英 / 英→中）、字段级高亮配色、lazy.nvim 懒加载。
+语言自动检测（中→英 / 英→中）、字段级高亮配色、lazy.nvim 懒加载，
+翻译后端支持 OpenAI 兼容 API 与 ACP agent 两种。
 仅支持中英两种语言，不引入其他语言。
 
 - 仓库：`/home/zaiqdong/work/vim-translator`
-- 目标环境：Neovim ≥ 0.9（本机 0.13-dev）
-- 文档版本：v0.3（2026-10-14，需求更新：仅中英互译，方向固定自动检测，去掉手动指定）
+- 目标环境：Neovim ≥ 0.10（`vim.system` 交互式 stdin）
+- 文档版本：v0.4（2026-10-15，新增 ACP 后端；单命令/替换语义见 git 历史）
 
 ---
 
 ## 1. 项目目标
 
-在 Neovim 内通过调用大模型 API 完成中英互译（**仅中英两种语言**）：
+在 Neovim 内通过调用大模型完成中英互译（**仅中英两种语言**）：
 
 1. **单词翻译**：按键翻译光标下单词，返回释义、音标、词性、例句等词典信息。
 2. **句子翻译**：可视模式选中句子，按键翻译整句。
@@ -187,7 +188,16 @@ require("vim-translator").setup({
 
 浮窗内键位：`q` / `<Esc>` 关闭（`buf`-local 映射，不影响全局）。
 
-## 7. 大模型请求设计（api.lua）
+## 7. 大模型请求设计（api.lua + acp.lua）
+
+### 7.0 后端分发
+
+`provider` 配置决定后端，`api.translate()` 统一入口（api.lua）：
+
+- `"llm"`（默认）：curl 异步请求 OpenAI 兼容 API（7.1–7.4）
+- `"acp"`：`require("vim-translator.acp").translate()`（7.5）
+
+两种后端复用同一套 prompt（单词/句子）与 `api.parse_content()` 结果分类逻辑。
 
 ### 7.1 请求体
 
@@ -268,6 +278,34 @@ local data = vim.json.decode(strip_code_fence(content))
 | JSON 解析失败 | 显示前 200 字符原始输出帮助排查 |
 | 不支持 response_format | 自动去参重试一次 |
 | 空选区 / 光标在空白处 | `vim.notify` 提示后静默返回 |
+
+### 7.5 ACP 后端（acp.lua）
+
+插件作为 **ACP client**（[Agent Client Protocol](https://agentclientprotocol.com)），
+spawn 任意 ACP agent 子进程，经 stdio（换行分隔 JSON-RPC 2.0）翻译：
+
+```
+首次翻译（懒启动）:
+  vim.system spawn agent (stdin=true, stdout 流式回调)
+  → initialize      (clientInfo: vim-translator)
+  → session/new     (cwd = getcwd())
+  → state = ready，后续翻译复用该会话
+
+每次翻译:
+  → session/prompt  (prompt = 翻译指令 + 原文，单条 text 块)
+  ← result.content[].text 拼接 → api.parse_content() 分类 → 浮窗
+```
+
+要点：
+
+- **进程常驻**：agent 只在首次翻译时启动，会话复用，`VimLeavePre` 时
+  `acp.shutdown()` 安静关闭。
+- **单飞**：新请求前对在途 prompt 发 `session/cancel`。
+- **超时**：每个 prompt 一个 `uv_timer`（`acp.timeout` 秒）。
+- **agent 异常退出**：失败所有 pending/waiters，状态复位为 idle，下次翻译重新拉起。
+- **健壮性**：stdout 行缓冲切分（消息可能跨 chunk）；agent 的非 JSON 输出忽略。
+- **测试**：`tests/acp/mock_agent.py` 模拟完整 ACP 协议（确定性返回 mock 译文），
+  `tests/run_headless.sh` case4 验证单词/句子/会话复用，无需真实 agent。
 
 ## 8. 结果展示与字段高亮（ui.lua + highlights.lua）
 

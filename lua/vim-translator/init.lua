@@ -63,6 +63,13 @@ end
 function M.setup(opts)
   config.setup(opts)
   highlights.setup()
+  -- 退出前关闭常驻的 ACP agent（若使用 acp 后端）
+  vim.api.nvim_create_autocmd("VimLeavePre", {
+    group = vim.api.nvim_create_augroup("vim-translator-acp", { clear = true }),
+    callback = function()
+      require("vim-translator.acp").shutdown()
+    end,
+  })
   -- 不内置任何键位：用户通过 :Translate 命令或自行 vim.keymap.set 调用
 end
 
